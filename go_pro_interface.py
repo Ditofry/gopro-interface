@@ -1,11 +1,13 @@
 import sys
 import cv2
 import numpy
+import base64
+import urllib2 # TODO python3
 import subprocess as sp
 from goprohero import GoProHero
 
 # network check
-print "Make sure you are connected to your GoPro's wireless network: http://gopro.com/help/articles/Solutions_Troubleshooting/GoPro-App-Camera-Connection-Troubleshooting"
+#print "Make sure you are connected to your GoPro's wireless network: http://gopro.com/help/articles/Solutions_Troubleshooting/GoPro-App-Camera-Connection-Troubleshooting"
 
 goProPass = None
 camera = None
@@ -37,6 +39,35 @@ def streamToOpenCV ():
             break
     cv2.destroyAllWindows()
 
+def retrieveJson (resource):
+    return urllib2.urlopen(resource).read()
+
+
+def postFrame (resource, img):
+    resource = "theapi.com/resource"
+    img = "/media/test.jpg" if img is None else img
+    request.add_header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
+    with open("image.jpg", "rb") as image_file:
+        encoded_image = base64.b64encode(img.read())
+    raw_params = {'image': encoded_image} # TODO figure out payload structure for API
+    params = urllib.urlencode(raw_params)
+    request = urllib2.Request(resource, params)
+    request.add_header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
+    resource = urllib2.urlopen(request)
+    info = resource.info()
+
+def postJson ():
+    url = 'http://www.someserver.com/cgi-bin/register.cgi'
+    values = {'name' : 'Michael Foord',
+        'location' : 'Northampton',
+        'language' : 'Python' }
+
+    data = urllib2.parse.urlencode(values)
+    data = data.encode('ascii') # data should be bytes
+    req = urllib2.request.Request(url, data)
+    with urllib2.request.urlopen(req) as response:
+        the_resource = response.read()
+
 # MATT's Messed up version
 # while True
 #     command = int(input("What woudl you like to do: "))
@@ -53,6 +84,9 @@ def streamToOpenCV ():
 #     fn, args = command_map[command]
 #     fn(*args)
 
+while True:
+    command = input("supply url for GET: ")
+    print retrieveJson(command)
 
 # Start interfaceing
 while True:
