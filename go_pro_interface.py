@@ -3,6 +3,7 @@ import cv2
 import numpy
 import base64
 import urllib2 # TODO python3
+import urllib
 import subprocess as sp
 from goprohero import GoProHero
 
@@ -43,32 +44,31 @@ def retrieveJson (resource):
     return urllib2.urlopen(resource).read()
 
 
-def postFrame (resource, img):
-    resource = "theapi.com/resource"
-    img = "/media/test.jpg" if img is None else img
-    request.add_header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
-    with open("image.jpg", "rb") as image_file:
-        encoded_image = base64.b64encode(img.read())
+def postFrame (resource, encoded = False, img = None):
+    img = "media/test.jpg" if img is None else img
+    if not encoded:
+        with open(img, "rb") as image_file:
+            encoded_image = base64.b64encode(image_file.read())
+    else:
+        encoded_image = img
+
     raw_params = {'image': encoded_image} # TODO figure out payload structure for API
     params = urllib.urlencode(raw_params)
     request = urllib2.Request(resource, params)
-    request.add_header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
+    # request.add_header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
     resource = urllib2.urlopen(request)
-    info = resource.info()
+    info = resource.read()
 
-def postJson ():
-    url = 'http://www.someserver.com/cgi-bin/register.cgi'
+def postJson (url):
     values = {'name' : 'Michael Foord',
-        'location' : 'Northampton',
-        'language' : 'Python' }
+              'location' : 'Northampton',
+              'language' : 'Python' }
 
-    data = urllib2.parse.urlencode(values)
-    data = data.encode('ascii') # data should be bytes
-    req = urllib2.request.Request(url, data)
-    with urllib2.request.urlopen(req) as response:
-        the_resource = response.read()
+    data = urllib.urlencode(values)
+    req = urllib2.Request(url, data)
+    response = urllib2.urlopen(req)
+    return esponse.read()
 
-# MATT's Messed up version
 # while True
 #     command = int(input("What woudl you like to do: "))
 #     command_map = {
@@ -86,7 +86,7 @@ def postJson ():
 
 while True:
     command = input("supply url for GET: ")
-    print retrieveJson(command)
+    print postFrame("http://localhost:3000/images")
 
 # Start interfaceing
 while True:
@@ -103,7 +103,9 @@ while True:
     elif command == 4:
         camera.command('preview', 'off')
     elif command == 5:
-        camera.image()
+        encoded = camera.image()
+        postFrame("http://localhost:3000/images", True, encoded)
+
     elif command == 6:
         # http://zulko.github.io/blog/2013/09/27/read-and-write-video-frames-in-python-using-ffmpeg/
         VIDEO_URL = WEBURL + "live/amba.m3u8"
@@ -121,6 +123,7 @@ while True:
             raw_image = pipe.stdout.read(432*240*3) # read 432*240*3 bytes (= 1 frame)
             image =  numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
             cv2.imshow("GoPro",image)
+
             if cv2.waitKey(5) == 27:
                 break
         cv2.destroyAllWindows()
