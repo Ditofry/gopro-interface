@@ -5,6 +5,11 @@ import base64
 import urllib2 # TODO python3
 import urllib
 import subprocess as sp
+import socket
+import threading
+import struct
+import Queue
+import time
 from goprohero import GoProHero
 
 # network check
@@ -14,17 +19,19 @@ goProPass = None
 camera = None
 WEBURL = "http://10.5.5.9:8080/"
 FFMPEG_BIN = "ffmpeg"
+HOST = "192.168.0.109"
+PORT = 5551
+
 # Establish connection
-while goProPass == None:
-    goProPass = raw_input("enter GoPro password: ")
-    camera = GoProHero(password=goProPass)
+# while goProPass == None:
+    # goProPass = raw_input("enter GoPro password: ")
 
 def streamToOpenCV ():
     # http://zulko.github.io/blog/2013/09/27/read-and-write-video-frames-in-python-using-ffmpeg/
     VIDEO_URL = WEBURL + "live/amba.m3u8"
 
     cv2.namedWindow("GoPro",cv2.CV_WINDOW_AUTOSIZE)
-
+    # https://docs.python.org/2/library/subprocess.html#popen-constructor
     pipe = sp.Popen([ FFMPEG_BIN, "-i", VIDEO_URL,
                "-loglevel", "quiet", # no text output
                "-an",   # disable audio
@@ -59,15 +66,37 @@ def postFrame (resource, encoded = False, img = None):
     resource = urllib2.urlopen(request)
     info = resource.read()
 
-def postJson (url):
-    values = {'name' : 'Michael Foord',
-              'location' : 'Northampton',
-              'language' : 'Python' }
-
-    data = urllib.urlencode(values)
+def postJson (url, jObject):
+    data = urllib.urlencode(jObject)
     req = urllib2.Request(url, data)
     response = urllib2.urlopen(req)
-    return esponse.read()
+    return response.read()
+
+def send(sock, payload):
+    try:
+        sock.connect((HOST, PORT))
+        sock.sendall(payload)
+        print sock.recv(1024)
+    finally:
+        return True
+
+def connectToServer():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((HOST, PORT))
+    conversing = True
+    print "Conversin"
+    while conversing:
+        try:
+            sock.connect((HOST, PORT))
+            with open("media/test.jpg", "rb") as imageFile:
+                f = imageFile.read()
+                b = bytearray(f)
+
+            sock.send(b)
+            print sock.recv(1024)
+        finally:
+            return True
+
 
 # while True
 #     command = int(input("What woudl you like to do: "))
@@ -84,16 +113,69 @@ def postJson (url):
 #     fn, args = command_map[command]
 #     fn(*args)
 
-while True:
-    command = input("supply url for GET: ")
-    print postFrame("http://localhost:3000/images")
+# HOST, PORT = "localhost", 5551
+#message = "hello from python"
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect((HOST, PORT))
+
+try:
+    while(1):
+        msg = sock.recv(1024)
+        #print "Received: {}".format(msg)
+        msg = msg.strip()
+        if("CurrFrame" in msg):
+            print "got frame request"
+            #Tell server we will send the image
+
+            # GENERATES AN IMAGE
+            VIDEO_URL = WEBURL + "live/amba.m3u8"
+            # https://docs.python.org/2/library/subprocess.html#popen-constructor
+            pipe = sp.Popen([ FFMPEG_BIN,
+                       "-i", VIDEO_URL,
+                       "-loglevel", "quiet", # no text output
+                       "-an", # disable audio
+                       "-f", "image2pipe",
+                       "-pix_fmt", "bgr24", # GoPro funkeh
+                       "-vcodec", "rawvideo", "-"],
+                       stdin = sp.PIPE, stdout = sp.PIPE)
+            while True:
+                # So the
+                raw_image = pipe.stdout.read(432*240*3)
+                if len(raw_image) < 10:
+                    continue
+                image = numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
+                success = cv2.imwrite('media/omg.png',image)
+                if success:
+                    break
+
+            with open("media/omg.png", "rb") as imageFile:
+               f = imageFile.read()
+               b = bytearray(f)
+            newMsg = "SendingFrame,%d\n" % len(b)
+            sock.sendall(newMsg)
+
+            sock.send(b)
+            #print "finished sending frame"
+
+except KeyboardInterrupt:
+    print "Ctrl-c pressed ..."
+    sock.close()
+    sys.exit(1)
+finally:
+    sock.close()
+
+
+#while True:
+    #command = input("supply url for GET: ")
+    #send(command)
+    #print postFrame("http://localhost:3000/images")
 
 # Start interfaceing
 while True:
     command = int(input("What would you like to do: "))
     if command == 0:
         break
-    # cameraOpts.get(command)
+    #cameraOpts.get(command)
     if command == 1:
         camera.command('record', 'on')
     elif command == 2:
@@ -103,29 +185,50 @@ while True:
     elif command == 4:
         camera.command('preview', 'off')
     elif command == 5:
-        encoded = camera.image()
-        postFrame("http://localhost:3000/images", True, encoded)
-
-    elif command == 6:
-        # http://zulko.github.io/blog/2013/09/27/read-and-write-video-frames-in-python-using-ffmpeg/
         VIDEO_URL = WEBURL + "live/amba.m3u8"
-
-        cv2.namedWindow("GoPro",cv2.CV_WINDOW_AUTOSIZE)
-
-        pipe = sp.Popen([ FFMPEG_BIN, "-i", VIDEO_URL,
+        # https://docs.python.org/2/library/subprocess.html#popen-constructor
+        pipe = sp.Popen([ FFMPEG_BIN,
+                   "-i", VIDEO_URL,
                    "-loglevel", "quiet", # no text output
-                   "-an",   # disable audio
+                   "-an", # disable audio
                    "-f", "image2pipe",
-                   "-pix_fmt", "bgr24",
+                   "-pix_fmt", "bgr24", # GoPro funkeh
                    "-vcodec", "rawvideo", "-"],
                    stdin = sp.PIPE, stdout = sp.PIPE)
         while True:
-            raw_image = pipe.stdout.read(432*240*3) # read 432*240*3 bytes (= 1 frame)
-            image =  numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
-            cv2.imshow("GoPro",image)
-
-            if cv2.waitKey(5) == 27:
+            # So the
+            raw_image = pipe.stdout.read(432*240*3)
+            if len(raw_image) < 10:
+                continue
+            image = numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
+            success = cv2.imwrite('media/omg.png',image)
+            if success:
                 break
-        cv2.destroyAllWindows()
     else:
         pass
+    #
+    # elif command == 6:
+    #     print "hey"
+    #     break
+    # elif command == 7:
+    #     #http://zulko.github.io/blog/2013/09/27/read-and-write-video-frames-in-python-using-ffmpeg/
+    #     # VIDEO_URL = WEBURL + "live/amba.m3u8"
+    #     # VIDEO_URL = "http://10.5.5.9/gp/gpControl/execute?p1=gpStream&c1=restart"
+    #
+    #     cv2.namedWindow("GoPro",cv2.CV_WINDOW_AUTOSIZE)
+    #
+    #     pipe = sp.Popen([ FFMPEG_BIN, "-i", VIDEO_URL,
+    #                "-loglevel", "quiet",  #no text output
+    #                "-an",    #disable audio
+    #                "-f", "image2pipe",
+    #                "-pix_fmt", "bgr24",
+    #                "-vcodec", "rawvideo", "-"],
+    #                stdin = sp.PIPE, stdout = sp.PIPE)
+    #     while True:
+    #         raw_image = pipe.stdout.read(432*240*3)#read 432*240*3 bytes (= 1 frame)
+    #         image =  numpy.fromstring(raw_image, dtype='uint8')#.reshape((240,432,3))
+    #         cv2.imshow("GoPro",image)
+    #
+    #         if cv2.waitKey(5) == 27:
+    #             break
+    #     cv2.destroyAllWindows()
