@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import cv2
 import numpy
@@ -12,6 +13,9 @@ import Queue
 import time
 import os
 from goprohero import GoProHero
+import capnp
+import CVImage_capnp
+
 # TODO: toggle GoPro interaction?
 camera = None
 WEBURL = "http://10.5.5.9:8080/"
@@ -21,11 +25,11 @@ HOST = "127.0.0.1"
 # PORT = 5551
 PORT = 8888
 
-goProPass = os.environ.get('LOCAL_GOPRO')
+# goProPass = os.environ.get('LOCAL_GOPRO')
 
 # Establish connection if ENV variable doesn't exist
-while goProPass == None:
-    goProPass = raw_input("enter GoPro password: ")
+# while goProPass == None:
+#     goProPass = raw_input("enter GoPro password: ")
 
 
 def streamToOpenCV ():
@@ -77,7 +81,7 @@ def send(sock, payload):
     try:
         sock.connect((HOST, PORT))
         sock.sendall(payload)
-        print sock.recv(1024)
+        print(sock.recv(1024))
     finally:
         return True
 
@@ -85,7 +89,7 @@ def connectToServer():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
     conversing = True
-    print "Conversin"
+    print("Conversin")
     while conversing:
         try:
             sock.connect((HOST, PORT))
@@ -94,11 +98,11 @@ def connectToServer():
                 b = bytearray(f)
 
             sock.send(b)
-            print sock.recv(1024)
+            print(sock.recv(1024))
         finally:
             return True
 
-def serverStream:
+def serverStream():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
     try:
@@ -106,50 +110,77 @@ def serverStream:
             msg = sock.recv(1024)
             msg = msg.strip()
             if("CurrFrame" in msg):
-                print "got frame request"
-                # GENERATES AN IMAGE
-                VIDEO_URL = WEBURL + "live/amba.m3u8"
-                print "have a vid URL"
-                # https://docs.python.org/2/library/subprocess.html#popen-constructor
-                # pipe = sp.Popen([ FFMPEG_BIN,
-                #            "-i", VIDEO_URL,
-                #            "-loglevel", "quiet", # no text output
-                #            "-an", # disable audio
-                #            "-f", "image2pipe",
-                #            "-pix_fmt", "bgr24", # GoPro funkeh
-                #            "-vcodec", "rawvideo", "-"],
-                #            stdin = sp.PIPE, stdout = sp.PIPE)
-                print "about to read from pipe"
-                # while True:
-                #     print "inf loop?"
-                #     raw_image = pipe.stdout.read(432*240*3)
-                #     print "not stuck on pipe read"
-                #     if len(raw_image) < 10:
-                #         print "sm len"
-                #         continue
-                #     image = numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
-                #     success = cv2.imwrite('media/omg.png',image)
-                #     if success:
-                #         break
-                print "about to open img"
+                print("got frame request")
+            # GENERATES AN IMAGE
+            VIDEO_URL = WEBURL + "live/amba.m3u8"
+            print("have a vid URL")
+            # https://docs.python.org/2/library/subprocess.html#popen-constructor
+            pipe = sp.Popen([ FFMPEG_BIN,
+                       "-i", VIDEO_URL,
+                       "-loglevel", "quiet", # no text output
+                       "-an", # disable audio
+                       "-f", "image2pipe",
+                       "-pix_fmt", "bgr24", # GoPro funkeh
+                       "-vcodec", "rawvideo", "-"],
+                       stdin = sp.PIPE, stdout = sp.PIPE)
+            print("about to read from pipe")
+            while True:
+                print "inf loop?"
+                raw_image = pipe.stdout.read(432*240*3)
+                print "not stuck on pipe read"
+                if len(raw_image) < 10:
+                    print "sm len"
+                    continue
+                image = numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
+                success = cv2.imwrite('media/omg.png',image)
+                if success:
+                    break
+            print("about to open img")
+            with open("media/omg.png", "rb") as imageFile:
+               f = imageFile.read()
+               b = bytearray(f)
+
+            cvi = CVImage_capnp.CVImage.new_message()
+            cvi.data = b
+            cvi.device = 'gopro'
+            cvi.imageData() # why did I put this here?
+            cvi.write(sock)
+            print("finished sending frame")
+        except KeyboardInterrupt:
+            print("Ctrl-c pressed ...")
+            sock.close()
+            sys.exit(1)
+        finally:
+            sock.close()
+
+serverMockStream():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((HOST, PORT))
+    try:
+        while(1):
+            msg = sock.recv(1024)
+            msg = msg.strip()
+            if("CurrFrame" in msg):
+                print("frame requested")
                 with open("media/omg.png", "rb") as imageFile:
                    f = imageFile.read()
                    b = bytearray(f)
-                newMsg = "SendingFrame,%d\n" % len(b)
-                print "sending: " + newMsg
-                sock.sendall(newMsg)
-                sock.send(b)
-                print "finished sending frame"
 
+                cvi = CVImage_capnp.CVImage.new_message()
+                cvi.data = b
+                cvi.device = 'gopro'
+                cvi.imageData() # why did I put this here?
+                cvi.write(sock)
+                print("finished sending frame")
     except KeyboardInterrupt:
-        print "Ctrl-c pressed ..."
+        print("Ctrl-c pressed ...")
         sock.close()
         sys.exit(1)
     finally:
         sock.close()
 
 # Start interfaceing
-def cameraInterface:
+def cameraInterface():
     while True:
         command = int(input("What would you like to do: "))
         if command == 0:
@@ -184,4 +215,6 @@ def cameraInterface:
                 if success:
                     break
         else:
-            print "unrecognized command"
+            print("unrecognized command")
+
+serverStream()
