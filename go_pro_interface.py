@@ -125,11 +125,11 @@ def serverStream():
                        stdin = sp.PIPE, stdout = sp.PIPE)
             print("about to read from pipe")
             while True:
-                print "inf loop?"
+                print("inf loop?")
                 raw_image = pipe.stdout.read(432*240*3)
-                print "not stuck on pipe read"
+                print("not stuck on pipe read")
                 if len(raw_image) < 10:
-                    print "sm len"
+                    print("sm len")
                     continue
                 image = numpy.fromstring(raw_image, dtype='uint8').reshape((240,432,3))
                 success = cv2.imwrite('media/omg.png',image)
@@ -146,14 +146,14 @@ def serverStream():
             cvi.imageData() # why did I put this here?
             cvi.write(sock)
             print("finished sending frame")
-        except KeyboardInterrupt:
-            print("Ctrl-c pressed ...")
-            sock.close()
-            sys.exit(1)
-        finally:
-            sock.close()
+    except KeyboardInterrupt:
+        print("Ctrl-c pressed ...")
+        sock.close()
+        sys.exit(1)
+    finally:
+        sock.close()
 
-serverMockStream():
+def serverMockStream():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
     try:
@@ -167,9 +167,12 @@ serverMockStream():
                    b = bytearray(f)
 
                 cvi = CVImage_capnp.CVImage.new_message()
-                cvi.data = b
+                if(b):
+                    print("eyeahh..?..")
+
+                cvi.mat = f
                 cvi.device = 'gopro'
-                cvi.imageData() # why did I put this here?
+                # cvi.imageData() # why did I put this here?
                 cvi.write(sock)
                 print("finished sending frame")
     except KeyboardInterrupt:
@@ -217,4 +220,4 @@ def cameraInterface():
         else:
             print("unrecognized command")
 
-serverStream()
+serverMockStream()

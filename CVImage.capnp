@@ -6,6 +6,6 @@ struct CVImage {
     rows @0 :UInt32;    # Rows in MAT Image; MAT.rows
     cols @1 :UInt32;    # Cols in MAT Image; MAT.cols
     type @2 :UInt32;    # Type of MAT Image; MAT.type()
-    data @3 :Text;      # Data (actual Image) of MAT Image; MAT.data
+    mat @3 :Text;      # Data (actual Image) of MAT Image; MAT.data
     device @4 :Text;    # Name of device
 }
